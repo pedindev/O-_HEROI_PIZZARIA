@@ -12,11 +12,41 @@ function App() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalModel, setModalModel] = useState(null);
   const [modalProductName, setModalProductName] = useState('');
-  const [ratings, setRatings] = useState({
-    bolo_cenoura: 4.5,
-    torta_doce: 4.8,
-    prato_cuscuz: 4.2,
-    bomba: 4.0
+  // Calcular médias iniciais baseadas nas avaliações salvas
+  const calculateInitialRatings = (savedRatings) => {
+    const productIds = ['bolo_cenoura', 'torta_doce', 'prato_cuscuz', 'bomba'];
+    const initialRatings = {};
+    
+    productIds.forEach(productId => {
+      const productRatingsList = savedRatings[productId] || [];
+      if (productRatingsList.length > 0) {
+        const average = productRatingsList.reduce((sum, rating) => sum + rating.stars, 0) / productRatingsList.length;
+        initialRatings[productId] = Math.round(average * 10) / 10; // Arredondar para 1 casa decimal
+      } else {
+        initialRatings[productId] = 0; // Sem avaliações ainda
+      }
+    });
+    
+    return initialRatings;
+  };
+
+  const [ratings, setRatings] = useState(() => {
+    const savedRatings = localStorage.getItem('productRatings');
+    if (savedRatings) {
+      try {
+        const parsedRatings = JSON.parse(savedRatings);
+        return calculateInitialRatings(parsedRatings);
+      } catch (error) {
+        console.error('Erro ao calcular médias iniciais:', error);
+      }
+    }
+    // Valores padrão se não houver dados salvos
+    return {
+      bolo_cenoura: 0,
+      torta_doce: 0,
+      prato_cuscuz: 0,
+      bomba: 0
+    };
   });
   const [ratingsModalOpen, setRatingsModalOpen] = useState(false);
   const [selectedProductRatings, setSelectedProductRatings] = useState([]);
@@ -26,12 +56,24 @@ function App() {
   // Estado para o formulário de avaliação
   const [ratingFormOpen, setRatingFormOpen] = useState(false);
 
-  // Dados de avaliações por produto (estado)
-  const [productRatings, setProductRatings] = useState({
-    bolo_cenoura: [],
-    torta_doce: [],
-    prato_cuscuz: [],
-    bomba: []
+  // Dados de avaliações por produto (estado) - carregados do localStorage
+  const [productRatings, setProductRatings] = useState(() => {
+    // Carregar avaliações salvas do localStorage
+    const savedRatings = localStorage.getItem('productRatings');
+    if (savedRatings) {
+      try {
+        return JSON.parse(savedRatings);
+      } catch (error) {
+        console.error('Erro ao carregar avaliações:', error);
+      }
+    }
+    // Retornar estrutura padrão se não houver dados salvos
+    return {
+      bolo_cenoura: [],
+      torta_doce: [],
+      prato_cuscuz: [],
+      bomba: []
+    };
   });
 
   // Dados dos produtos com informações completas
@@ -121,10 +163,20 @@ function App() {
 
   const handleSubmitRating = (newRating) => {
     // Adicionar nova avaliação ao estado
-    setProductRatings(prev => ({
-      ...prev,
-      [selectedProductIdForRatings]: [...(prev[selectedProductIdForRatings] || []), newRating]
-    }));
+    const updatedRatings = {
+      ...productRatings,
+      [selectedProductIdForRatings]: [...(productRatings[selectedProductIdForRatings] || []), newRating]
+    };
+    
+    setProductRatings(updatedRatings);
+    
+    // Salvar no localStorage para persistência
+    try {
+      localStorage.setItem('productRatings', JSON.stringify(updatedRatings));
+      console.log('✅ Avaliação salva com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao salvar avaliação:', error);
+    }
     
     // Atualizar a lista de avaliações no modal
     setSelectedProductRatings(prev => [...prev, newRating]);
@@ -137,9 +189,10 @@ function App() {
     // Atualizar a média de avaliação
     setRatings(prev => ({
       ...prev,
-      [selectedProductIdForRatings]: newAverage
+      [selectedProductIdForRatings]: Math.round(newAverage * 10) / 10
     }));
   };
+
 
   const categories = [
     { id: 'all', name: 'Todos' },
@@ -223,7 +276,7 @@ function App() {
                   <div className="stars">
                     {[1, 2, 3, 4, 5].map((star) => {
                       const rating = ratings[product.id];
-                      const fillPercentage = Math.max(0, Math.min(100, ((rating - (star - 1)) / 1) * 100));
+                      const fillPercentage = rating > 0 ? Math.max(0, Math.min(100, ((rating - (star - 1)) / 1) * 100)) : 0;
                       
                       return (
                         <div key={star} className="star-container">
@@ -235,16 +288,18 @@ function App() {
                           >
                             <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                           </svg>
-                          <svg 
-                            className="star-fill"
-                            width="16" 
-                            height="16" 
-                            viewBox="0 0 24 24" 
-                            fill="#FFD700"
-                            style={{ clipPath: `inset(0 ${100 - fillPercentage}% 0 0)` }}
-                          >
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-                          </svg>
+                          {rating > 0 && (
+                            <svg 
+                              className="star-fill"
+                              width="16" 
+                              height="16" 
+                              viewBox="0 0 24 24" 
+                              fill="#FFD700"
+                              style={{ clipPath: `inset(0 ${100 - fillPercentage}% 0 0)` }}
+                            >
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            </svg>
+                          )}
                         </div>
                       );
                     })}
